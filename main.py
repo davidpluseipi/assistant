@@ -1,13 +1,20 @@
 import csv
 import pyautogui
 from PyQt5 import QtWidgets
-from PyQt5.QtWidgets import QApplication, QMainWindow, QAction
+from PyQt5.QtCore import pyqtSlot
+from PyQt5.QtWidgets import (QApplication,
+                             QMainWindow,
+                             QLineEdit,
+                             QPushButton)
 import pyscreenshot as image_grabber
 import pytesseract
-from PySide2.QtCore import Slot, Qt
+from queue import Queue
 import sys
 import threading
 from time import sleep
+import webbrowser
+
+global que
 
 
 class Interface(QMainWindow):
@@ -16,33 +23,56 @@ class Interface(QMainWindow):
 
         # basic setup
         self.setGeometry(400, 400, 500, 300)
-        self.label = QtWidgets.QLabel(self)
+        self.setWindowTitle('Alfred')
 
-        # menu stuff
-        self.menu = self.menuBar()
-        self.file_menu = self.menu.addMenu("File")
+        # textbox
+        self.textbox = QLineEdit(self)
+        self.textbox.move(20, 20)
+        self.textbox.resize(280, 40)
+        self.textbox.returnPressed.connect(self.on_click)
 
-        # setup for exit
-        exit_action = QAction("Exit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.exit_app)
-        self.file_menu.addAction(exit_action)
+        # button next to textbox
+        self.button1 = QPushButton('Enter', self)
+        self.button1.move(320, 20)
+        self.button1.clicked.connect(self.on_click)
+
+        # label, aka title, for the contact info
+        self.label1 = QtWidgets.QLabel(self)
+        self.label1.setText('Contact Info')
+        self.label1.adjustSize()
+        self.label1.move(20, 75)
+
+        # label (as a place to put the contact info)
+        self.label2 = QtWidgets.QLabel(self)
 
         # start a separate thread
-        my_thread = threading.Thread(target=self.do_stuff)
+        my_thread = threading.Thread(target=self.do_stuff, daemon=True)
         my_thread.start()
 
-    @Slot()
-    def exit_app(self, checked):
-        QApplication.quit()
+        # button to call contact
+        self.button2 = QPushButton('Call', self)
+        self.button2.move(320, 75)
+        self.button2.clicked.connect(self.call_contact)
+
+    @pyqtSlot()
+    def on_click(self):
+        textbox_value = self.textbox.text()
+        print(textbox_value)
+        self.textbox.setText('')
+
+    @pyqtSlot()
+    def call_contact(self):
+        print(que.get())
+        link = r'https://messages.google.com/web/u/0/calls/new'
+        webbrowser.open_new(link)
 
     def do_stuff(self):
         pytesseract.pytesseract.tesseract_cmd = r'C:\Users\david\AppData\Local\Tesseract-OCR\tesseract.exe'
-        x_max = image_grabber.grab().size[0]
-        y_max = image_grabber.grab().size[1]
+        screen = image_grabber.grab()
+        x_max, y_max = screen.size
         while True:
             x1, y1 = pyautogui.position()
-            x2 = x1 + 400
+            x2 = x1 + 200
             if x2 > x_max:
                 x2 = x_max
             y2 = y1 + 300
@@ -57,17 +87,18 @@ class Interface(QMainWindow):
                     given_name = row["Given Name"]
                     if given_name != '' and the_string.find(f'{given_name}') != -1 and a != given_name:
                         a = given_name
+                        que.put(row["Phone 1 - Value"])
                         full_text = f'{row["Name"]}\n{row["Phone 1 - Value"]}\n{row["E-mail 1 - Value"]}'
-                        self.label.setText(full_text)
-                        self.label.adjustSize()
-                        self.label.move(20, 50)
+                        self.label2.setText(full_text)
+                        self.label2.adjustSize()
+                        self.label2.move(20, 100)
             sleep(0.1)
-            QApplication.processEvents()
 
 
 if __name__ == '__main__':
+    que = Queue()
     app = QApplication(sys.argv)
     ui1 = Interface()
     ui1.show()
-    app.exec_()
+    sys.exit(app.exec_())
 
